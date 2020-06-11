@@ -5,7 +5,8 @@ library(dplyr)
 library(tidyr)
 library(ecoforecastR)
 
-data_raw <- read.csv('nefi_fire.csv')
+data_raw <- read.csv('nefi_fire.csv') %>%
+  mutate(age_days = round(age * 365.25))
 
 #lets only use one region for now
 data_raw <- data_raw[data_raw$region=="CB",]
@@ -20,15 +21,29 @@ data_id <- data_mat %>%
   mutate(site=as.numeric(row.names(.))) %>%
   select(site,id)
 
-#convert to mat for jags
-data_mat <- data_mat %>%
+#convert to NDVI mat for jags
+ndvi_mat <- data_mat %>%
   select(-id) %>%
   as.matrix(.)
 
+#convert to age mat for jags
+age_mat <- data_raw %>%
+  select(id,year,age_days) %>%
+  spread(year,age_days) %>%
+  select(-id) %>%
+  as.matrix(.)
+
+#get environmental variables
+env_mat <- data_raw %>%
+  select(id,year,map,tmax01,tmin07,apan) %>% 
+  group_by(id) %>%
+  summarise_all(mean) %>%
+  select(-year)
+
 #n sites
-NS = nrow(data_mat)
+NS = nrow(ndvi_mat)
 #n time
-NT = ncol(data_mat)
+NT = ncol(ndvi_mat)
 
 ###JAGS model
 
@@ -62,7 +77,7 @@ y[s,t] ~ dnorm(x[s,t],tau_obs)
 "
 
 # Create new data object, and set initial conditions using random samples from this data:
-data <- list(y=data_mat,
+data <- list(y=ndvi_mat,
              NS = NS,
              NT = NT
 )
@@ -95,7 +110,7 @@ cidf <- as.data.frame(ci) %>%
   rename(lower=`2.5%`,middle=`50%`,upper=`97.5%`)
 
 #transform data to long
-datadf <- data_mat %>%
+datadf <- ndvi_mat %>%
   as.data.frame(.) %>%
   mutate(site=rownames(.)) %>%
   gather("year","obs",-site) %>%
