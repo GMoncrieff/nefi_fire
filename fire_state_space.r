@@ -88,13 +88,12 @@ r ~ dpois(20)
 #### initial conditions: t = time, s = site
 for(s in 1:NS){
   x[s,1] ~ dnorm(0.5,1)           ## prior on Initial condition
-  b1[s] ~ dnorm(2,1)            # Initial condition, to be pulled from global eventually
-  b2[s] ~ dnorm(0.5,1)
+  b[s,1:2] ~ dmnorm(mu.beta, R)
 }
 #### process model: random walk
 for(s in 1:NS){
   for(t in 2:NT){
-    mu[s,t] <- x[s,t-1] + b1[s]*exp(b2[s]*(-1*age[s,t]))
+    mu[s,t] <- x[s,t-1] + b[s,1]*exp(b[s,2]*(-1*age[s,t]))
     x[s,t]~dnorm(mu[s,t],tau_add)
   }
 }
@@ -118,7 +117,9 @@ data <- list(y=ndvi_mat,
 data_age <- list(y=ndvi_mat,
              age=age_mat,
              NS = NS,
-             NT = NT
+             NT = NT,
+             mu.beta = c(2,0.5),
+             R = diag(1, 2)
 )
 # Send the model, the data, and the initial conditions to JAGS, which will return the JAGS model object:
 j.model.rw   <- jags.model (file = textConnection(random_site_walk),
@@ -131,7 +132,8 @@ var.out   <- coda.samples (model = j.model.rw,
 
 j.model.rw.age   <- jags.model (file = textConnection(growth_site_walk),
                             data = data_age,
-                            n.chains = 3)
+                            n.chains = 3,
+                            n.adapt=2000)
 
 var.out.age   <- coda.samples (model = j.model.rw.age,
                            variable.names = "x",
@@ -184,5 +186,5 @@ ggplot(ciplot, aes(x = time,y = obs)) +
   geom_ribbon(aes(ymin = lower, ymax = upper),alpha=0.2,fill="red") +
   xlab("time") +
   ylab("NDVI") +
-  facet_wrap(~site)+
+  facet_wrap(~site) +
   theme_bw()
