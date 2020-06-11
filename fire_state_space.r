@@ -133,7 +133,7 @@ j.model.rw.age   <- jags.model (file = textConnection(growth_site_walk),
                             data = data_age,
                             n.chains = 3)
 
-var.out.age   <- coda.samples (model = j.model.rw,
+var.out.age   <- coda.samples (model = j.model.rw.age,
                            variable.names = "x",
                            n.iter = 5000)
 
