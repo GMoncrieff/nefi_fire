@@ -76,8 +76,47 @@ y[s,t] ~ dnorm(x[s,t],tau_obs)
 }
 "
 
+######
+growth_site_walk = "
+model{
+#### Priors
+tau_obs ~ dgamma(0.01,0.00000001) ## Observation error precision
+tau_add ~ dgamma(0.01,0.00000001) ## Process errror precision
+p ~ dbeta(1, 1)
+r ~ dpois(20)
+
+#### initial conditions: t = time, s = site
+for(s in 1:NS){
+  x[s,1] ~ dnorm(0.5,1)           ## prior on Initial condition
+  b1[s] ~ dnorm(2,1)            # Initial condition, to be pulled from global eventually
+  b2[s] ~ dnorm(0.5,1)
+}
+#### process model: random walk
+for(s in 1:NS){
+  for(t in 2:NT){
+    mu[s,t] <- x[s,t-1] + b1[s]*exp(b2[s]*(-1*age[s,t]))
+    x[s,t]~dnorm(mu[s,t],tau_add)
+  }
+}
+### observation model
+for(t in 1:NT){
+  for(s in 1:NS){
+    y[s,t] ~ dnorm(x[s,t],tau_obs)
+    age[s,t] ~ dnegbin(p, r)
+  }
+}
+}
+"
+
 # Create new data object, and set initial conditions using random samples from this data:
 data <- list(y=ndvi_mat,
+             NS = NS,
+             NT = NT
+)
+
+# Create new data object, and set initial conditions using random samples from this data:
+data_age <- list(y=ndvi_mat,
+             age=age_mat,
              NS = NS,
              NT = NT
 )
@@ -90,13 +129,24 @@ var.out   <- coda.samples (model = j.model.rw,
                            variable.names = "x",
                            n.iter = 5000)
 
+j.model.rw.age   <- jags.model (file = textConnection(growth_site_walk),
+                            data = data_age,
+                            n.chains = 3)
+
+var.out.age   <- coda.samples (model = j.model.rw,
+                           variable.names = "x",
+                           n.iter = 5000)
+
 #var.mat      <- as.matrix(var.out)
 #GBR <- gelman.plot(var.out)
 #pairs(var.mat)
 
 jags.burn <- window(var.out,start=2000) #discard burnin
+jags.burn.age <- window(var.out.age,start=2000) #discard burnin
+
 #calc ci
-ci <- apply(as.matrix(jags.burn),2,quantile,c(0.025,0.5,0.975))
+#ci <- apply(as.matrix(jags.burn),2,quantile,c(0.025,0.5,0.975))
+ci <- apply(as.matrix(jags.burn.age),2,quantile,c(0.025,0.5,0.975))
 
 #tranformn results to long
 cidf <- as.data.frame(ci) %>%
